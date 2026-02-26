@@ -12,6 +12,7 @@ const exportSection = document.querySelector("#export-section");
 const quickPresetButtons = Array.from(document.querySelectorAll(".quick-preset-btn"));
 
 const packSummary = document.querySelector("#pack-summary");
+const previewGateNote = document.querySelector("#preview-gate-note");
 const titleEl = document.querySelector("#result-title");
 const tagsEl = document.querySelector("#result-tags");
 const highlightsEl = document.querySelector("#result-highlights");
@@ -192,13 +193,66 @@ function renderList(target, rows, asChips = false) {
   }
 }
 
-function renderPack(pack) {
-  packSummary.textContent = `Score ${pack.score}/100 · ${pack.tags.length} tags · Generated ${new Date(pack.generatedAt).toLocaleString()}`;
+function toPositiveCount(value) {
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
+
+function renderPreviewGate(preview) {
+  if (!previewGateNote) {
+    return;
+  }
+
+  if (!preview || preview.limited !== true) {
+    previewGateNote.textContent = "";
+    previewGateNote.classList.add("hidden");
+    return;
+  }
+
+  const hidden = preview.hiddenCounts && typeof preview.hiddenCounts === "object" ? preview.hiddenCounts : {};
+  const hiddenParts = [];
+  const hiddenTags = toPositiveCount(hidden.tags);
+  const hiddenHighlights = toPositiveCount(hidden.highlights);
+  const hiddenFaq = toPositiveCount(hidden.faq);
+  const hiddenPhotos = toPositiveCount(hidden.photoShotList);
+  const hiddenChecklist = toPositiveCount(hidden.launchChecklist);
+
+  if (hiddenTags > 0) {
+    hiddenParts.push(`${hiddenTags} tags`);
+  }
+  if (hiddenHighlights > 0) {
+    hiddenParts.push(`${hiddenHighlights} highlights`);
+  }
+  if (hiddenFaq > 0) {
+    hiddenParts.push(`${hiddenFaq} FAQ answers`);
+  }
+  if (hiddenPhotos > 0) {
+    hiddenParts.push(`${hiddenPhotos} photo steps`);
+  }
+  if (hiddenChecklist > 0) {
+    hiddenParts.push(`${hiddenChecklist} checklist items`);
+  }
+
+  const summary = hiddenParts.length
+    ? `Limited preview shown (${hiddenParts.join(", ")} locked).`
+    : "Limited preview shown.";
+  const lockMessage =
+    typeof preview.lockMessage === "string" && preview.lockMessage.trim().length > 0
+      ? preview.lockMessage.trim()
+      : "Checkout unlocks the full listing pack.";
+
+  previewGateNote.textContent = `${summary} ${lockMessage}`;
+  previewGateNote.classList.remove("hidden");
+}
+
+function renderPack(pack, preview) {
+  const tagCount = Array.isArray(pack.tags) ? pack.tags.length : 0;
+  packSummary.textContent = `Score ${pack.score}/100 · ${tagCount} visible tags · Generated ${new Date(pack.generatedAt).toLocaleString()}`;
   titleEl.textContent = pack.title;
   descriptionEl.textContent = pack.description;
   renderList(tagsEl, pack.tags, true);
   renderList(highlightsEl, pack.highlights);
   renderList(photosEl, pack.photoShotList);
+  renderPreviewGate(preview);
 }
 
 function lockExport() {
@@ -233,14 +287,14 @@ async function generatePack(payload, { autoPreview = false } = {}) {
   checkoutUrl = data?.paywall?.paymentUrl || null;
   lockExport();
 
-  renderPack(data.pack);
+  renderPack(data.pack, data.preview);
   packResult.classList.remove("hidden");
 
   if (autoPreview) {
     paymentSection.classList.add("hidden");
     setStatus(
       listingStatus,
-      "Instant sample preview is ready. Replace the form inputs and click Generate Pack for your listing.",
+      "Instant sample preview is ready (limited). Replace inputs and click Generate Pack for your listing.",
       "ok"
     );
     setStatus(paymentStatus, "Checkout appears after you generate your own listing pack.", "neutral");
@@ -248,8 +302,8 @@ async function generatePack(payload, { autoPreview = false } = {}) {
   }
 
   paymentSection.classList.remove("hidden");
-  setStatus(listingStatus, "Pack ready. Complete checkout to unlock export.", "ok");
-  setStatus(paymentStatus, "Checkout is ready.", "neutral");
+  setStatus(listingStatus, "Preview ready. Complete checkout to unlock full pack + export.", "ok");
+  setStatus(paymentStatus, "Checkout is ready to unlock the full listing pack.", "neutral");
 }
 
 async function runAutoPreview() {

@@ -197,6 +197,15 @@ button:disabled {
   color: #5f4638;
 }
 
+.preview-note {
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid #f0c8b8;
+  background: #fff6f1;
+  color: #7b3c28;
+  font-weight: 600;
+}
+
 .status[data-tone="ok"] {
   border-color: #abd7c2;
   background: #ebf8f1;

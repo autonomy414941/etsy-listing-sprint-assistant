@@ -79,6 +79,18 @@ type State = {
 
 type JsonObject = Record<string, unknown>;
 type MetricsCounts = Record<EventType, number>;
+type PreviewHiddenCounts = {
+  tags: number;
+  highlights: number;
+  faq: number;
+  photoShotList: number;
+  launchChecklist: number;
+};
+type PreviewMeta = {
+  limited: true;
+  hiddenCounts: PreviewHiddenCounts;
+  lockMessage: string;
+};
 
 const EVENT_TYPES: EventType[] = [
   "landing_view",
@@ -473,6 +485,69 @@ function parseGenerateInput(payload: JsonObject): {
   };
 }
 
+function previewDescription(description: string): string {
+  const boundary = description.search(/[.!?](\s|$)/);
+  const sentence = boundary >= 0 ? description.slice(0, boundary + 1).trim() : description.trim();
+  const compact = sentence.length > 220 ? `${sentence.slice(0, 217)}...` : sentence;
+  return `${compact} Unlock full description, FAQ, photo plan, and checklist after checkout.`;
+}
+
+function buildPreviewPack(pack: ListingPack): {
+  previewPack: ListingPack;
+  preview: PreviewMeta;
+} {
+  const tagPreviewCount = Math.min(pack.tags.length, 5);
+  const highlightPreviewCount = Math.min(pack.highlights.length, 2);
+  const faqPreviewCount = Math.min(pack.faq.length, 1);
+  const photoPreviewCount = Math.min(pack.photoShotList.length, 3);
+  const checklistPreviewCount = Math.min(pack.launchChecklist.length, 2);
+
+  const hiddenCounts: PreviewHiddenCounts = {
+    tags: Math.max(0, pack.tags.length - tagPreviewCount),
+    highlights: Math.max(0, pack.highlights.length - highlightPreviewCount),
+    faq: Math.max(0, pack.faq.length - faqPreviewCount),
+    photoShotList: Math.max(0, pack.photoShotList.length - photoPreviewCount),
+    launchChecklist: Math.max(0, pack.launchChecklist.length - checklistPreviewCount)
+  };
+
+  const previewTags = pack.tags.slice(0, tagPreviewCount);
+  if (hiddenCounts.tags > 0) {
+    previewTags.push("unlock full pack");
+  }
+
+  const previewHighlights = pack.highlights.slice(0, highlightPreviewCount);
+  if (hiddenCounts.highlights > 0) {
+    previewHighlights.push("Unlock the remaining quality notes after checkout.");
+  }
+
+  const previewPhotoShotList = pack.photoShotList.slice(0, photoPreviewCount);
+  if (hiddenCounts.photoShotList > 0) {
+    previewPhotoShotList.push("Unlock the full 8-shot plan after checkout.");
+  }
+
+  const previewChecklist = pack.launchChecklist.slice(0, checklistPreviewCount);
+  if (hiddenCounts.launchChecklist > 0) {
+    previewChecklist.push("Unlock the remaining launch checklist after checkout.");
+  }
+
+  return {
+    previewPack: {
+      ...pack,
+      tags: previewTags,
+      highlights: previewHighlights,
+      description: previewDescription(pack.description),
+      faq: pack.faq.slice(0, faqPreviewCount),
+      photoShotList: previewPhotoShotList,
+      launchChecklist: previewChecklist
+    },
+    preview: {
+      limited: true,
+      hiddenCounts,
+      lockMessage: "Checkout unlocks the full listing pack plus TXT/JSON export."
+    }
+  };
+}
+
 function buildExportText(session: ListingSession): string {
   const lines: string[] = [];
   lines.push("Etsy Listing Sprint Assistant Export");
@@ -607,6 +682,7 @@ const server = http.createServer(async (request, response) => {
       const sessionId = randomUUID();
       const timestamp = new Date().toISOString();
       const pack = buildListingPack(input);
+      const { previewPack, preview } = buildPreviewPack(pack);
 
       const session: ListingSession = {
         sessionId,
@@ -635,11 +711,12 @@ const server = http.createServer(async (request, response) => {
 
       sendJson(response, 200, {
         sessionId,
-        pack,
+        pack: previewPack,
+        preview,
         paywall: {
           priceUsd: PRICE_USD,
           paymentUrl: PAYMENT_URL,
-          unlockAction: "listing_export"
+          unlockAction: "full_listing_pack_and_export"
         }
       });
       return;
