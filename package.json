@@ -1,0 +1,16 @@
+{
+  "name": "etsy-listing-sprint-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Etsy listing generation workspace with paid export",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "test": "npm run build && node --test dist/listing.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.14",
+    "typescript": "^5.8.2"
+  }
+}

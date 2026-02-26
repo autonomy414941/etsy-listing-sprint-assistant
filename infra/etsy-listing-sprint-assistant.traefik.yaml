@@ -1,0 +1,23 @@
+http:
+  routers:
+    etsy-listing-sprint-assistant-http:
+      entryPoints:
+        - http
+      rule: "Host(`etsy-listing.devtoolbox.dedyn.io`) || Host(`etsy-listing.46.225.49.219.nip.io`)"
+      service: etsy-listing-sprint-assistant
+      priority: 1200
+
+    etsy-listing-sprint-assistant-https:
+      entryPoints:
+        - https
+      rule: "Host(`etsy-listing.devtoolbox.dedyn.io`) || Host(`etsy-listing.46.225.49.219.nip.io`)"
+      service: etsy-listing-sprint-assistant
+      priority: 1200
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    etsy-listing-sprint-assistant:
+      loadBalancer:
+        servers:
+          - url: "http://etsy-listing-sprint-assistant:8080"

@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Etsy Listing Sprint Assistant</title>
+    <meta
+      name="description"
+      content="Generate Etsy-ready title, tags, description, and launch checklist in minutes. Pay once to export the full listing pack."
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero card">
+        <p class="kicker">MVP</p>
+        <h1>Etsy Listing Sprint Assistant</h1>
+        <p>
+          Turn raw product notes into an Etsy-ready listing pack: title, 13 tags, description, FAQ, and photo plan.
+          Export unlock: <strong>$19</strong>.
+        </p>
+      </section>
+
+      <section class="card">
+        <h2>1) Generate Listing Pack</h2>
+        <form id="listing-form" class="form-grid">
+          <label>
+            Shop name
+            <input name="shopName" required maxlength="80" placeholder="Copper Pine Studio" />
+          </label>
+
+          <label>
+            Product type
+            <input name="productType" required maxlength="80" placeholder="Ceramic ring dish" />
+          </label>
+
+          <label>
+            Target audience
+            <input name="targetAudience" required maxlength="80" placeholder="Bridal party gifts" />
+          </label>
+
+          <label>
+            Primary keyword
+            <input name="primaryKeyword" required maxlength="80" placeholder="Personalized ring dish" />
+          </label>
+
+          <label class="wide">
+            Supporting keywords (comma/newline separated)
+            <textarea
+              name="supportingKeywordsCsv"
+              rows="3"
+              required
+              placeholder="Bridesmaid gift, engagement gift, custom jewelry tray"
+            ></textarea>
+          </label>
+
+          <label class="wide">
+            Materials (optional, comma/newline separated)
+            <textarea name="materialsCsv" rows="2" placeholder="Ceramic, glaze, gold paint"></textarea>
+          </label>
+
+          <label>
+            Tone
+            <select name="tone">
+              <option value="warm">Warm</option>
+              <option value="playful">Playful</option>
+              <option value="minimal">Minimal</option>
+              <option value="luxury">Luxury</option>
+            </select>
+          </label>
+
+          <label>
+            Price band
+            <input name="priceBand" maxlength="80" value="$20-$45" />
+          </label>
+
+          <label>
+            Processing days
+            <input type="number" name="processingTimeDays" min="1" max="45" value="3" />
+          </label>
+
+          <label class="inline-check">
+            <input type="checkbox" name="personalization" checked />
+            Personalization available
+          </label>
+
+          <label class="inline-check">
+            <input type="checkbox" name="includeUkSpelling" />
+            Use UK spelling
+          </label>
+
+          <button id="generate-btn" type="submit">Generate Pack</button>
+        </form>
+        <p id="listing-status" class="status" data-tone="neutral">Fill in details to generate your listing pack.</p>
+      </section>
+
+      <section id="pack-result" class="card hidden">
+        <h2>2) Review Pack</h2>
+        <p id="pack-summary" class="summary"></p>
+
+        <div class="result-block">
+          <h3>Title</h3>
+          <p id="result-title" class="mono"></p>
+        </div>
+
+        <div class="result-block">
+          <h3>Tags</h3>
+          <ul id="result-tags" class="chip-list"></ul>
+        </div>
+
+        <div class="result-block">
+          <h3>Highlights</h3>
+          <ul id="result-highlights"></ul>
+        </div>
+
+        <div class="result-block">
+          <h3>Description</h3>
+          <p id="result-description"></p>
+        </div>
+
+        <div class="result-block">
+          <h3>Photo Shot List</h3>
+          <ul id="result-photos"></ul>
+        </div>
+      </section>
+
+      <section id="payment-section" class="card hidden">
+        <h2>3) Unlock Export</h2>
+        <p>Pay once, then submit proof to unlock TXT/JSON export.</p>
+        <button id="checkout-btn" type="button">Open Checkout</button>
+
+        <form id="proof-form" class="form-grid proof-grid">
+          <label>
+            Payer email
+            <input name="payerEmail" type="email" required placeholder="you@example.com" />
+          </label>
+
+          <label>
+            Transaction ID
+            <input name="transactionId" required maxlength="120" placeholder="pi_123..." />
+          </label>
+
+          <label class="wide">
+            Evidence URL (optional)
+            <input name="evidenceUrl" maxlength="300" placeholder="https://..." />
+          </label>
+
+          <label class="wide">
+            Note (optional)
+            <textarea name="note" rows="2" maxlength="400"></textarea>
+          </label>
+
+          <button id="proof-btn" type="submit">Submit Proof</button>
+        </form>
+
+        <p id="payment-status" class="status" data-tone="neutral">Checkout will open after you generate a pack.</p>
+      </section>
+
+      <section id="export-section" class="card hidden">
+        <h2>4) Export</h2>
+        <button id="export-btn" type="button" disabled>Generate Export</button>
+        <pre id="export-content" class="export"></pre>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
