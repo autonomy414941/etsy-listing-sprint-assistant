@@ -54,6 +54,17 @@ body {
   font-weight: 600;
 }
 
+.hero-proof {
+  margin: 0.6rem 0 0;
+  padding: 0.55rem 0.7rem;
+  border-radius: 10px;
+  border: 1px solid #efc6b5;
+  background: #fff3ec;
+  color: #7d3821;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+
 .kicker {
   margin: 0;
   font-size: 0.75rem;
@@ -77,6 +88,35 @@ h1 {
 
 h2 {
   font-size: 1.2rem;
+}
+
+.conversion-note {
+  margin: 0.3rem 0 0.75rem;
+  font-size: 0.92rem;
+  color: #5f4638;
+}
+
+.quick-presets {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  margin-bottom: 0.85rem;
+}
+
+.quick-preset-btn {
+  width: 100%;
+  border-radius: 999px;
+  border: 1px solid #efbda9;
+  background: #fff7f2;
+  color: #8a3f28;
+  font-size: 0.86rem;
+  font-weight: 700;
+  padding: 0.5rem 0.65rem;
+}
+
+.quick-preset-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(180, 66, 36, 0.18);
 }
 
 .form-grid {

@@ -20,14 +20,26 @@
           Export unlock: <strong>$19</strong>.
         </p>
         <p class="hero-note">First visit loads an instant sample preview so you can judge output quality in under 10 seconds.</p>
+        <p class="hero-proof">
+          Preview for free. Pay only if the full pack is worth exporting to your live Etsy listing.
+        </p>
       </section>
 
       <section class="card">
         <h2>1) Generate Listing Pack</h2>
+        <p class="conversion-note">
+          Fast path: only <strong>Product type</strong> is required. Everything else is optional and auto-filled.
+        </p>
+        <div class="quick-presets">
+          <button type="button" class="quick-preset-btn" data-preset="bridal">Bridal Gift</button>
+          <button type="button" class="quick-preset-btn" data-preset="pet">Pet Memorial</button>
+          <button type="button" class="quick-preset-btn" data-preset="digital">Digital Planner</button>
+          <button type="button" class="quick-preset-btn" data-preset="home">Home Decor</button>
+        </div>
         <form id="listing-form" class="form-grid">
           <label>
-            Shop name
-            <input name="shopName" required maxlength="80" placeholder="Copper Pine Studio" />
+            Shop name (optional)
+            <input name="shopName" maxlength="80" placeholder="Copper Pine Studio" />
           </label>
 
           <label>
@@ -36,21 +48,20 @@
           </label>
 
           <label>
-            Target audience
-            <input name="targetAudience" required maxlength="80" placeholder="Bridal party gifts" />
+            Target audience (optional)
+            <input name="targetAudience" maxlength="80" placeholder="Bridal party gifts" />
           </label>
 
           <label>
-            Primary keyword
-            <input name="primaryKeyword" required maxlength="80" placeholder="Personalized ring dish" />
+            Primary keyword (optional)
+            <input name="primaryKeyword" maxlength="80" placeholder="Personalized ring dish" />
           </label>
 
           <label class="wide">
-            Supporting keywords (comma/newline separated)
+            Supporting keywords (optional, comma/newline separated)
             <textarea
               name="supportingKeywordsCsv"
               rows="3"
-              required
               placeholder="Bridesmaid gift, engagement gift, custom jewelry tray"
             ></textarea>
           </label>
@@ -92,7 +103,10 @@
 
           <button id="generate-btn" type="submit">Generate Pack</button>
         </form>
-        <p class="hint">Sample preview runs automatically once per browser. Replace with your details and regenerate to unlock checkout.</p>
+        <p class="hint">
+          Sample preview runs automatically once per browser. You can also click a quick preset above for a near-ready
+          draft.
+        </p>
         <p id="listing-status" class="status" data-tone="neutral">Fill in details to generate your listing pack.</p>
       </section>
 

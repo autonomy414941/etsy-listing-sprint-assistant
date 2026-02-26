@@ -9,6 +9,7 @@ const exportBtn = document.querySelector("#export-btn");
 const packResult = document.querySelector("#pack-result");
 const paymentSection = document.querySelector("#payment-section");
 const exportSection = document.querySelector("#export-section");
+const quickPresetButtons = Array.from(document.querySelectorAll(".quick-preset-btn"));
 
 const packSummary = document.querySelector("#pack-summary");
 const titleEl = document.querySelector("#result-title");
@@ -35,6 +36,60 @@ const AUTO_PREVIEW_SAMPLE = {
   personalization: true,
   includeUkSpelling: false
 };
+const QUICK_PRESETS = {
+  bridal: {
+    shopName: "Luna Keepsakes",
+    productType: "Personalized ring dish",
+    targetAudience: "bridal party gifts",
+    primaryKeyword: "bridesmaid ring dish",
+    supportingKeywordsCsv: "engagement gift, wedding keepsake, ceramic jewelry tray",
+    materialsCsv: "ceramic, glaze, gold paint",
+    tone: "warm",
+    priceBand: "$18-$34",
+    processingTimeDays: 3,
+    personalization: true,
+    includeUkSpelling: false
+  },
+  pet: {
+    shopName: "North Pine Prints",
+    productType: "Dog memorial print",
+    targetAudience: "pet loss gifts",
+    primaryKeyword: "pet memorial print",
+    supportingKeywordsCsv: "dog loss gift, remembrance art, sympathy gift",
+    materialsCsv: "matte paper, archival ink",
+    tone: "minimal",
+    priceBand: "$24-$42",
+    processingTimeDays: 2,
+    personalization: true,
+    includeUkSpelling: false
+  },
+  digital: {
+    shopName: "Bloom Daily Studio",
+    productType: "Undated digital planner",
+    targetAudience: "busy professionals",
+    primaryKeyword: "digital planner template",
+    supportingKeywordsCsv: "notion planner, productivity download, printable planner",
+    materialsCsv: "",
+    tone: "playful",
+    priceBand: "$9-$19",
+    processingTimeDays: 1,
+    personalization: false,
+    includeUkSpelling: false
+  },
+  home: {
+    shopName: "Oakline Home",
+    productType: "Linen cushion cover",
+    targetAudience: "modern home decor buyers",
+    primaryKeyword: "neutral cushion cover",
+    supportingKeywordsCsv: "farmhouse decor, throw pillow case, living room decor",
+    materialsCsv: "linen, cotton blend",
+    tone: "luxury",
+    priceBand: "$28-$49",
+    processingTimeDays: 4,
+    personalization: false,
+    includeUkSpelling: false
+  }
+};
 
 let currentSessionId = null;
 let checkoutUrl = null;
@@ -43,6 +98,38 @@ let unlocked = false;
 function setStatus(target, message, tone = "neutral") {
   target.textContent = message;
   target.dataset.tone = tone;
+}
+
+function setQuickPresetsDisabled(disabled) {
+  for (const button of quickPresetButtons) {
+    button.disabled = disabled;
+  }
+}
+
+function setFormValue(name, value) {
+  const field = listingForm.querySelector(`[name="${name}"]`);
+  if (!field) {
+    return;
+  }
+
+  if (field instanceof HTMLInputElement) {
+    if (field.type === "checkbox") {
+      field.checked = Boolean(value);
+      return;
+    }
+    field.value = value == null ? "" : String(value);
+    return;
+  }
+
+  if (field instanceof HTMLTextAreaElement || field instanceof HTMLSelectElement) {
+    field.value = value == null ? "" : String(value);
+  }
+}
+
+function applyQuickPreset(preset) {
+  for (const [key, value] of Object.entries(preset)) {
+    setFormValue(key, value);
+  }
 }
 
 function collectGeneratePayload() {
@@ -167,6 +254,7 @@ async function generatePack(payload, { autoPreview = false } = {}) {
 
 async function runAutoPreview() {
   generateBtn.disabled = true;
+  setQuickPresetsDisabled(true);
   setStatus(listingStatus, "Generating instant sample preview...", "neutral");
   try {
     await generatePack(
@@ -183,12 +271,14 @@ async function runAutoPreview() {
     setStatus(listingStatus, `Could not generate instant sample preview: ${error.message}`, "error");
   } finally {
     generateBtn.disabled = false;
+    setQuickPresetsDisabled(false);
   }
 }
 
 listingForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   generateBtn.disabled = true;
+  setQuickPresetsDisabled(true);
   setStatus(listingStatus, "Generating listing pack...", "neutral");
 
   try {
@@ -201,8 +291,36 @@ listingForm.addEventListener("submit", async (event) => {
     setStatus(listingStatus, `Could not generate pack: ${error.message}`, "error");
   } finally {
     generateBtn.disabled = false;
+    setQuickPresetsDisabled(false);
   }
 });
+
+for (const button of quickPresetButtons) {
+  button.addEventListener("click", async () => {
+    const presetKey = String(button.dataset.preset || "");
+    const preset = QUICK_PRESETS[presetKey];
+    if (!preset) {
+      return;
+    }
+
+    applyQuickPreset(preset);
+    generateBtn.disabled = true;
+    setQuickPresetsDisabled(true);
+    setStatus(listingStatus, "Generating preset listing pack...", "neutral");
+
+    try {
+      await generatePack({
+        ...collectGeneratePayload(),
+        briefIntent: "sample_cta"
+      });
+    } catch (error) {
+      setStatus(listingStatus, `Could not generate preset pack: ${error.message}`, "error");
+    } finally {
+      generateBtn.disabled = false;
+      setQuickPresetsDisabled(false);
+    }
+  });
+}
 
 checkoutBtn.addEventListener("click", async () => {
   if (!currentSessionId) {

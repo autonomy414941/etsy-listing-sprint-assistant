@@ -368,7 +368,49 @@ function parseKeywords(payload: JsonObject): string[] {
   if (keywordsCsv) {
     return parseKeywordCsv(keywordsCsv);
   }
-  return parseStringArray(payload, "supportingKeywords", 16, 80);
+
+  if ("supportingKeywords" in payload) {
+    return parseStringArray(payload, "supportingKeywords", 16, 80);
+  }
+
+  return [];
+}
+
+function normalizeKeywordSeed(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9&\-\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildFallbackKeywords(primaryKeyword: string, productType: string, targetAudience: string): string[] {
+  const candidates = [
+    primaryKeyword,
+    `${primaryKeyword} gift`,
+    `${productType} gift`,
+    `${targetAudience} gift`,
+    `${productType} etsy`,
+    "handmade gift"
+  ];
+
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of candidates) {
+    const normalized = normalizeKeywordSeed(candidate);
+    if (!normalized || normalized.length > 80 || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    result.push(normalized);
+  }
+
+  if (!result.length) {
+    return ["etsy gift"];
+  }
+
+  return result.slice(0, 8);
 }
 
 function parseMaterials(payload: JsonObject): string[] {
@@ -390,11 +432,14 @@ function parseGenerateInput(payload: JsonObject): {
   selfTest: boolean;
   briefIntent: BriefIntent;
 } {
-  const shopName = asRequiredString(payload, "shopName", 80);
+  const shopName = asOptionalString(payload, "shopName", 80) || "Your Etsy Shop";
   const productType = asRequiredString(payload, "productType", 80);
-  const targetAudience = asRequiredString(payload, "targetAudience", 80);
-  const primaryKeyword = asRequiredString(payload, "primaryKeyword", 80);
-  const supportingKeywords = parseKeywords(payload);
+  const targetAudience = asOptionalString(payload, "targetAudience", 80) || "etsy shoppers";
+  const primaryKeyword = asOptionalString(payload, "primaryKeyword", 80) || productType;
+  const parsedSupportingKeywords = parseKeywords(payload);
+  const supportingKeywords = parsedSupportingKeywords.length
+    ? parsedSupportingKeywords
+    : buildFallbackKeywords(primaryKeyword, productType, targetAudience);
   const materials = parseMaterials(payload);
   const tone = ((asOptionalString(payload, "tone", 20) || "warm").toLowerCase() as ListingInput["tone"]);
   const priceBand = asOptionalString(payload, "priceBand", 80) || "$20-$45";
