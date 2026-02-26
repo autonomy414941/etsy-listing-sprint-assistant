@@ -40,7 +40,7 @@ type EventType =
   | "payment_evidence_submitted"
   | "listing_exported";
 
-type BriefIntent = "manual_submit" | "auto_preview" | "sample_cta" | "unknown";
+type BriefIntent = "manual_submit" | "auto_preview" | "sample_cta" | "quick_start" | "unknown";
 
 type PaymentProof = {
   submittedAt: string;
@@ -147,7 +147,12 @@ function normalizeBriefIntent(value: unknown): BriefIntent {
     return "unknown";
   }
   const normalized = value.trim().toLowerCase();
-  if (normalized === "manual_submit" || normalized === "auto_preview" || normalized === "sample_cta") {
+  if (
+    normalized === "manual_submit" ||
+    normalized === "auto_preview" ||
+    normalized === "sample_cta" ||
+    normalized === "quick_start"
+  ) {
     return normalized;
   }
   return "unknown";

@@ -3,6 +3,9 @@ const proofForm = document.querySelector("#proof-form");
 const listingStatus = document.querySelector("#listing-status");
 const paymentStatus = document.querySelector("#payment-status");
 const generateBtn = document.querySelector("#generate-btn");
+const heroQuickstartForm = document.querySelector("#hero-quickstart-form");
+const heroProductTypeInput = document.querySelector("#hero-product-type");
+const heroGenerateBtn = document.querySelector("#hero-generate-btn");
 const checkoutBtn = document.querySelector("#checkout-btn");
 const proofBtn = document.querySelector("#proof-btn");
 const exportBtn = document.querySelector("#export-btn");
@@ -105,6 +108,14 @@ function setQuickPresetsDisabled(disabled) {
   for (const button of quickPresetButtons) {
     button.disabled = disabled;
   }
+}
+
+function setGenerationControlsDisabled(disabled) {
+  generateBtn.disabled = disabled;
+  if (heroGenerateBtn) {
+    heroGenerateBtn.disabled = disabled;
+  }
+  setQuickPresetsDisabled(disabled);
 }
 
 function setFormValue(name, value) {
@@ -280,7 +291,7 @@ async function jsonRequest(url, payload) {
   return data;
 }
 
-async function generatePack(payload, { autoPreview = false } = {}) {
+async function generatePack(payload, { autoPreview = false, scrollToResult = false } = {}) {
   const data = await jsonRequest("/api/listings/generate", payload);
 
   currentSessionId = data.sessionId;
@@ -289,6 +300,10 @@ async function generatePack(payload, { autoPreview = false } = {}) {
 
   renderPack(data.pack, data.preview);
   packResult.classList.remove("hidden");
+
+  if (scrollToResult) {
+    packResult.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   if (autoPreview) {
     paymentSection.classList.add("hidden");
@@ -307,8 +322,7 @@ async function generatePack(payload, { autoPreview = false } = {}) {
 }
 
 async function runAutoPreview() {
-  generateBtn.disabled = true;
-  setQuickPresetsDisabled(true);
+  setGenerationControlsDisabled(true);
   setStatus(listingStatus, "Generating instant sample preview...", "neutral");
   try {
     await generatePack(
@@ -324,15 +338,13 @@ async function runAutoPreview() {
   } catch (error) {
     setStatus(listingStatus, `Could not generate instant sample preview: ${error.message}`, "error");
   } finally {
-    generateBtn.disabled = false;
-    setQuickPresetsDisabled(false);
+    setGenerationControlsDisabled(false);
   }
 }
 
 listingForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  generateBtn.disabled = true;
-  setQuickPresetsDisabled(true);
+  setGenerationControlsDisabled(true);
   setStatus(listingStatus, "Generating listing pack...", "neutral");
 
   try {
@@ -344,10 +356,41 @@ listingForm.addEventListener("submit", async (event) => {
   } catch (error) {
     setStatus(listingStatus, `Could not generate pack: ${error.message}`, "error");
   } finally {
-    generateBtn.disabled = false;
-    setQuickPresetsDisabled(false);
+    setGenerationControlsDisabled(false);
   }
 });
+
+if (heroQuickstartForm && heroProductTypeInput instanceof HTMLInputElement) {
+  heroQuickstartForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const quickProductType = heroProductTypeInput.value.trim();
+    if (!quickProductType) {
+      setStatus(listingStatus, "Enter a product type first.", "error");
+      heroProductTypeInput.focus();
+      return;
+    }
+
+    setFormValue("productType", quickProductType);
+    setGenerationControlsDisabled(true);
+    setStatus(listingStatus, "Generating quick-start listing pack...", "neutral");
+
+    try {
+      await generatePack(
+        {
+          ...collectGeneratePayload(),
+          productType: quickProductType,
+          briefIntent: "quick_start"
+        },
+        { scrollToResult: true }
+      );
+    } catch (error) {
+      setStatus(listingStatus, `Could not generate quick-start pack: ${error.message}`, "error");
+    } finally {
+      setGenerationControlsDisabled(false);
+    }
+  });
+}
 
 for (const button of quickPresetButtons) {
   button.addEventListener("click", async () => {
@@ -358,8 +401,7 @@ for (const button of quickPresetButtons) {
     }
 
     applyQuickPreset(preset);
-    generateBtn.disabled = true;
-    setQuickPresetsDisabled(true);
+    setGenerationControlsDisabled(true);
     setStatus(listingStatus, "Generating preset listing pack...", "neutral");
 
     try {
@@ -370,8 +412,7 @@ for (const button of quickPresetButtons) {
     } catch (error) {
       setStatus(listingStatus, `Could not generate preset pack: ${error.message}`, "error");
     } finally {
-      generateBtn.disabled = false;
-      setQuickPresetsDisabled(false);
+      setGenerationControlsDisabled(false);
     }
   });
 }
