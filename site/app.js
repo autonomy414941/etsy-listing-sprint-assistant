@@ -21,6 +21,20 @@ const exportContent = document.querySelector("#export-content");
 const query = new URLSearchParams(window.location.search);
 const source = query.get("source") || "web";
 const selfTest = ["1", "true", "yes"].includes((query.get("selfTest") || "").toLowerCase());
+const AUTO_PREVIEW_STORAGE_KEY = "etsy-listing-sprint-assistant.auto_preview_v1";
+const AUTO_PREVIEW_SAMPLE = {
+  shopName: "Demo Craft Studio",
+  productType: "Minimalist ceramic ring dish",
+  targetAudience: "bridal party gift buyers",
+  primaryKeyword: "personalized ring dish",
+  supportingKeywordsCsv: "bridesmaid gift, engagement gift, jewelry tray",
+  materialsCsv: "ceramic, glaze, gold paint",
+  tone: "warm",
+  priceBand: "$22-$38",
+  processingTimeDays: 4,
+  personalization: true,
+  includeUkSpelling: false
+};
 
 let currentSessionId = null;
 let checkoutUrl = null;
@@ -50,6 +64,35 @@ function collectGeneratePayload() {
   };
 }
 
+function hasCompletedAutoPreview() {
+  try {
+    return Boolean(window.localStorage.getItem(AUTO_PREVIEW_STORAGE_KEY));
+  } catch {
+    return false;
+  }
+}
+
+function markAutoPreviewCompleted() {
+  try {
+    window.localStorage.setItem(AUTO_PREVIEW_STORAGE_KEY, new Date().toISOString());
+  } catch {
+    // Ignore browsers where localStorage is blocked.
+  }
+}
+
+function shouldRunAutoPreview() {
+  if (selfTest) {
+    return false;
+  }
+
+  const previewFlag = (query.get("preview") || "").trim().toLowerCase();
+  if (previewFlag === "off" || previewFlag === "0") {
+    return false;
+  }
+
+  return !hasCompletedAutoPreview();
+}
+
 function renderList(target, rows, asChips = false) {
   target.innerHTML = "";
   for (const row of rows) {
@@ -71,6 +114,13 @@ function renderPack(pack) {
   renderList(photosEl, pack.photoShotList);
 }
 
+function lockExport() {
+  unlocked = false;
+  exportBtn.disabled = true;
+  exportSection.classList.add("hidden");
+  exportContent.textContent = "";
+}
+
 async function jsonRequest(url, payload) {
   const response = await fetch(url, {
     method: "POST",
@@ -89,27 +139,64 @@ async function jsonRequest(url, payload) {
   return data;
 }
 
+async function generatePack(payload, { autoPreview = false } = {}) {
+  const data = await jsonRequest("/api/listings/generate", payload);
+
+  currentSessionId = data.sessionId;
+  checkoutUrl = data?.paywall?.paymentUrl || null;
+  lockExport();
+
+  renderPack(data.pack);
+  packResult.classList.remove("hidden");
+
+  if (autoPreview) {
+    paymentSection.classList.add("hidden");
+    setStatus(
+      listingStatus,
+      "Instant sample preview is ready. Replace the form inputs and click Generate Pack for your listing.",
+      "ok"
+    );
+    setStatus(paymentStatus, "Checkout appears after you generate your own listing pack.", "neutral");
+    return;
+  }
+
+  paymentSection.classList.remove("hidden");
+  setStatus(listingStatus, "Pack ready. Complete checkout to unlock export.", "ok");
+  setStatus(paymentStatus, "Checkout is ready.", "neutral");
+}
+
+async function runAutoPreview() {
+  generateBtn.disabled = true;
+  setStatus(listingStatus, "Generating instant sample preview...", "neutral");
+  try {
+    await generatePack(
+      {
+        ...AUTO_PREVIEW_SAMPLE,
+        source,
+        selfTest,
+        briefIntent: "auto_preview"
+      },
+      { autoPreview: true }
+    );
+    markAutoPreviewCompleted();
+  } catch (error) {
+    setStatus(listingStatus, `Could not generate instant sample preview: ${error.message}`, "error");
+  } finally {
+    generateBtn.disabled = false;
+  }
+}
+
 listingForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   generateBtn.disabled = true;
   setStatus(listingStatus, "Generating listing pack...", "neutral");
 
   try {
-    const payload = collectGeneratePayload();
-    const data = await jsonRequest("/api/listings/generate", payload);
-
-    currentSessionId = data.sessionId;
-    checkoutUrl = data?.paywall?.paymentUrl || null;
-    unlocked = false;
-    exportBtn.disabled = true;
-
-    renderPack(data.pack);
-    packResult.classList.remove("hidden");
-    paymentSection.classList.remove("hidden");
-    exportSection.classList.add("hidden");
-
-    setStatus(listingStatus, "Pack ready. Complete checkout to unlock export.", "ok");
-    setStatus(paymentStatus, "Checkout is ready.", "neutral");
+    const payload = {
+      ...collectGeneratePayload(),
+      briefIntent: "manual_submit"
+    };
+    await generatePack(payload);
   } catch (error) {
     setStatus(listingStatus, `Could not generate pack: ${error.message}`, "error");
   } finally {
@@ -205,3 +292,7 @@ exportBtn.addEventListener("click", async () => {
     exportBtn.disabled = false;
   }
 });
+
+if (shouldRunAutoPreview()) {
+  void runAutoPreview();
+}

@@ -40,6 +40,8 @@ type EventType =
   | "payment_evidence_submitted"
   | "listing_exported";
 
+type BriefIntent = "manual_submit" | "auto_preview" | "sample_cta" | "unknown";
+
 type PaymentProof = {
   submittedAt: string;
   payerEmail: string;
@@ -126,6 +128,17 @@ function normalizeSource(value: unknown, fallback = "web"): string {
     return fallback;
   }
   return normalized;
+}
+
+function normalizeBriefIntent(value: unknown): BriefIntent {
+  if (typeof value !== "string") {
+    return "unknown";
+  }
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "manual_submit" || normalized === "auto_preview" || normalized === "sample_cta") {
+    return normalized;
+  }
+  return "unknown";
 }
 
 function asOptionalString(payload: JsonObject, key: string, maxLength = 200): string | undefined {
@@ -375,6 +388,7 @@ function parseGenerateInput(payload: JsonObject): {
   input: ListingInput;
   source: string;
   selfTest: boolean;
+  briefIntent: BriefIntent;
 } {
   const shopName = asRequiredString(payload, "shopName", 80);
   const productType = asRequiredString(payload, "productType", 80);
@@ -390,6 +404,7 @@ function parseGenerateInput(payload: JsonObject): {
 
   const source = normalizeSource(payload.source, "web");
   const selfTest = parseBoolean(payload.selfTest);
+  const briefIntent = normalizeBriefIntent(payload.briefIntent);
 
   const input = sanitizeListingInput({
     shopName,
@@ -408,7 +423,8 @@ function parseGenerateInput(payload: JsonObject): {
   return {
     input,
     source,
-    selfTest
+    selfTest,
+    briefIntent
   };
 }
 
@@ -542,7 +558,7 @@ const server = http.createServer(async (request, response) => {
 
     if (method === "POST" && pathname === "/api/listings/generate") {
       const payload = await parseBody(request);
-      const { input, source, selfTest } = parseGenerateInput(payload);
+      const { input, source, selfTest, briefIntent } = parseGenerateInput(payload);
       const sessionId = randomUUID();
       const timestamp = new Date().toISOString();
       const pack = buildListingPack(input);
@@ -567,7 +583,8 @@ const server = http.createServer(async (request, response) => {
         details: {
           score: pack.score,
           tags: pack.tags.length,
-          tone: input.tone
+          tone: input.tone,
+          briefIntent
         }
       });
 

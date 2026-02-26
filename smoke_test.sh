@@ -12,7 +12,7 @@ fi
 
 generate_payload="$(curl -fsS -X POST "$BASE_URL/api/listings/generate" \
   -H 'content-type: application/json' \
-  --data '{"shopName":"Self Test Studio","productType":"ceramic mug","targetAudience":"book lovers","primaryKeyword":"book lover mug","supportingKeywordsCsv":"gift for reader, cozy mug, literary gift","materialsCsv":"ceramic, glaze","tone":"warm","priceBand":"$18-$30","processingTimeDays":3,"personalization":true,"includeUkSpelling":false,"source":"smoke","selfTest":true}')"
+  --data '{"shopName":"Self Test Studio","productType":"ceramic mug","targetAudience":"book lovers","primaryKeyword":"book lover mug","supportingKeywordsCsv":"gift for reader, cozy mug, literary gift","materialsCsv":"ceramic, glaze","tone":"warm","priceBand":"$18-$30","processingTimeDays":3,"personalization":true,"includeUkSpelling":false,"source":"smoke","selfTest":true,"briefIntent":"manual_submit"}')"
 
 session_id="$(printf '%s' "$generate_payload" | jq -r '.sessionId')"
 tag_count="$(printf '%s' "$generate_payload" | jq -r '.pack.tags | length')"
