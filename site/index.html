@@ -41,6 +41,28 @@
         </div>
       </section>
 
+      <noscript>
+        <section class="card noscript-card">
+          <h2>No-JS Quick Start</h2>
+          <p class="noscript-note">
+            JavaScript appears disabled. Submit this form to generate a listing preview, open checkout, and unlock
+            export in a server-rendered flow.
+          </p>
+          <form method="POST" action="/quick-start" class="hero-quickstart-form">
+            <label class="hero-quickstart-field">
+              Product type
+              <input name="productType" maxlength="80" required placeholder="Personalized ring dish" />
+            </label>
+            <label class="hero-quickstart-field">
+              Shop name (optional)
+              <input name="shopName" maxlength="80" placeholder="Copper Pine Studio" />
+            </label>
+            <input type="hidden" name="source" value="web_form" />
+            <button type="submit">Generate No-JS Pack</button>
+          </form>
+        </section>
+      </noscript>
+
       <section class="card">
         <h2>1) Generate Listing Pack</h2>
         <p class="conversion-note">

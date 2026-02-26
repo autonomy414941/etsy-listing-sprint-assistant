@@ -58,9 +58,44 @@ if [[ "$brief_generated_count" == "null" || "$brief_generated_count" -lt 1 ]]; t
   exit 1
 fi
 
+quickstart_headers="$(curl -sS -D - -o /dev/null -X POST "$BASE_URL/quick-start" \
+  -H 'content-type: application/x-www-form-urlencoded' \
+  --data 'productType=smoke+ring+dish&shopName=Smoke+Studio&source=smoke&selfTest=true')"
+
+quickstart_location="$(printf '%s\n' "$quickstart_headers" | awk -F': ' 'tolower($1)=="location"{print $2}' | tr -d '\r')"
+quickstart_session="${quickstart_location##*/}"
+if [[ -z "$quickstart_location" || -z "$quickstart_session" || "$quickstart_session" == "$quickstart_location" ]]; then
+  echo "quick-start redirect failed: $quickstart_headers" >&2
+  exit 1
+fi
+
+quickstart_page="$(curl -fsS "$BASE_URL$quickstart_location")"
+if ! printf '%s' "$quickstart_page" | rg -q "Listing Preview"; then
+  echo "quick-start page missing preview: $quickstart_page" >&2
+  exit 1
+fi
+
+quickstart_checkout_headers="$(curl -sS -D - -o /dev/null "$BASE_URL/quick-start/$quickstart_session/checkout?source=smoke&selfTest=true")"
+quickstart_checkout_location="$(printf '%s\n' "$quickstart_checkout_headers" | awk -F': ' 'tolower($1)=="location"{print $2}' | tr -d '\r')"
+if [[ -z "$quickstart_checkout_location" || "$quickstart_checkout_location" != https://* ]]; then
+  echo "quick-start checkout failed: $quickstart_checkout_headers" >&2
+  exit 1
+fi
+
+curl -sS -D - -o /dev/null -X POST "$BASE_URL/quick-start/$quickstart_session/proof" \
+  -H 'content-type: application/x-www-form-urlencoded' \
+  --data "payerEmail=selftest@example.com&transactionId=smoke-nojs-$(date +%s)&source=smoke&selfTest=true" >/dev/null
+
+quickstart_export="$(curl -fsS "$BASE_URL/quick-start/$quickstart_session/export.txt?source=smoke&selfTest=true")"
+if ! printf '%s' "$quickstart_export" | rg -q "Etsy Listing Sprint Assistant Export"; then
+  echo "quick-start export failed: $quickstart_export" >&2
+  exit 1
+fi
+
 echo "healthStatus=$status"
 echo "tagCount=$tag_count"
 echo "checkoutMode=$checkout_mode"
 echo "proofStatus=$proof_status"
 echo "exportFile=$export_file"
 echo "briefGeneratedIncludingSelfTests=$brief_generated_count"
+echo "quickStartSession=$quickstart_session"

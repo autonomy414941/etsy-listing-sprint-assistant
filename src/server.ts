@@ -40,7 +40,13 @@ type EventType =
   | "payment_evidence_submitted"
   | "listing_exported";
 
-type BriefIntent = "manual_submit" | "auto_preview" | "sample_cta" | "quick_start" | "unknown";
+type BriefIntent =
+  | "manual_submit"
+  | "auto_preview"
+  | "sample_cta"
+  | "quick_start"
+  | "no_js_quick_start"
+  | "unknown";
 
 type PaymentProof = {
   submittedAt: string;
@@ -117,6 +123,22 @@ function sendJson(response: http.ServerResponse, statusCode: number, payload: un
   response.end(JSON.stringify(payload));
 }
 
+function sendHtml(response: http.ServerResponse, statusCode: number, payload: string): void {
+  response.writeHead(statusCode, {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store"
+  });
+  response.end(payload);
+}
+
+function sendText(response: http.ServerResponse, statusCode: number, payload: string): void {
+  response.writeHead(statusCode, {
+    "content-type": "text/plain; charset=utf-8",
+    "cache-control": "no-store"
+  });
+  response.end(payload);
+}
+
 function parseBoolean(value: unknown): boolean {
   if (value === true) {
     return true;
@@ -126,7 +148,7 @@ function parseBoolean(value: unknown): boolean {
   }
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
-    return normalized === "true" || normalized === "1" || normalized === "yes";
+    return normalized === "true" || normalized === "1" || normalized === "yes" || normalized === "on";
   }
   return false;
 }
@@ -151,7 +173,8 @@ function normalizeBriefIntent(value: unknown): BriefIntent {
     normalized === "manual_submit" ||
     normalized === "auto_preview" ||
     normalized === "sample_cta" ||
-    normalized === "quick_start"
+    normalized === "quick_start" ||
+    normalized === "no_js_quick_start"
   ) {
     return normalized;
   }
@@ -294,22 +317,7 @@ function safeErrorCode(error: unknown): string {
 }
 
 async function parseBody(request: http.IncomingMessage): Promise<JsonObject> {
-  const chunks: Buffer[] = [];
-  let size = 0;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    size += buffer.length;
-    if (size > MAX_BODY_BYTES) {
-      throw new Error("invalid_body_too_large");
-    }
-    chunks.push(buffer);
-  }
-
-  if (!chunks.length) {
-    return {};
-  }
-
-  const raw = Buffer.concat(chunks).toString("utf8").trim();
+  const raw = (await readRawBody(request)).trim();
   if (!raw) {
     return {};
   }
@@ -326,6 +334,53 @@ async function parseBody(request: http.IncomingMessage): Promise<JsonObject> {
   }
 
   return parsed as JsonObject;
+}
+
+async function readRawBody(request: http.IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > MAX_BODY_BYTES) {
+      throw new Error("invalid_body_too_large");
+    }
+    chunks.push(buffer);
+  }
+
+  if (!chunks.length) {
+    return "";
+  }
+
+  return Buffer.concat(chunks).toString("utf8");
+}
+
+async function parseFormBody(request: http.IncomingMessage): Promise<JsonObject> {
+  const raw = (await readRawBody(request)).trim();
+  if (!raw) {
+    return {};
+  }
+
+  const params = new URLSearchParams(raw);
+  const result: JsonObject = {};
+
+  for (const [key, value] of params.entries()) {
+    if (!(key in result)) {
+      result[key] = value;
+      continue;
+    }
+
+    const previous = result[key];
+    if (Array.isArray(previous)) {
+      previous.push(value);
+      result[key] = previous;
+      continue;
+    }
+
+    result[key] = [String(previous), value];
+  }
+
+  return result;
 }
 
 async function serveStatic(requestPath: string, response: http.ServerResponse): Promise<boolean> {
@@ -596,6 +651,136 @@ function buildExportText(session: ListingSession): string {
   return lines.join("\n");
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderStringList(values: string[]): string {
+  return values.map((value) => `<li>${escapeHtml(value)}</li>`).join("");
+}
+
+function createListingSession(input: ListingInput, source: string, selfTest: boolean): {
+  session: ListingSession;
+  previewPack: ListingPack;
+  preview: PreviewMeta;
+} {
+  const sessionId = randomUUID();
+  const timestamp = new Date().toISOString();
+  const pack = buildListingPack(input);
+  const { previewPack, preview } = buildPreviewPack(pack);
+
+  const session: ListingSession = {
+    sessionId,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    source,
+    selfTest,
+    input,
+    pack,
+    paid: false
+  };
+
+  state.sessions[sessionId] = session;
+  return { session, previewPack, preview };
+}
+
+function renderQuickStartPage(session: ListingSession): string {
+  const { previewPack, preview } = buildPreviewPack(session.pack);
+  const pack = session.paid ? session.pack : previewPack;
+  const checkoutHref = `/quick-start/${session.sessionId}/checkout`;
+  const proofAction = `/quick-start/${session.sessionId}/proof`;
+  const exportHref = `/quick-start/${session.sessionId}/export.txt`;
+  const previewSummary = session.paid
+    ? "Full pack unlocked."
+    : `Limited preview shown. ${preview.lockMessage}`;
+  const paymentStatus = session.paid
+    ? `Payment proof submitted for ${escapeHtml(session.paymentProof?.payerEmail || "this session")}.`
+    : "Submit payment proof to unlock full pack + export.";
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Etsy Listing Quick Start</title>
+    <style>
+      body { margin: 0; padding: 1.25rem; background: #f8efe6; color: #2a1f18; font-family: "Trebuchet MS", sans-serif; }
+      .wrap { max-width: 840px; margin: 0 auto; display: grid; gap: 1rem; }
+      .card { background: #fffaf6; border: 1px solid #e8c9b3; border-radius: 12px; padding: 1rem; }
+      h1, h2 { margin: 0 0 0.5rem; font-family: Georgia, serif; }
+      p { margin: 0.45rem 0; line-height: 1.45; }
+      ul { margin: 0.45rem 0 0; padding-left: 1.2rem; }
+      .title { font-family: "Courier New", monospace; font-size: 0.95rem; }
+      .cta { display: inline-block; margin-top: 0.5rem; padding: 0.55rem 0.8rem; border-radius: 9px; background: #b9472b; color: #fff; text-decoration: none; font-weight: 700; }
+      label { display: grid; gap: 0.3rem; margin-top: 0.6rem; font-weight: 600; }
+      input { border: 1px solid #d2b6a3; border-radius: 8px; padding: 0.52rem 0.6rem; font: inherit; }
+      button { margin-top: 0.7rem; border: 0; border-radius: 8px; background: #b9472b; color: #fff; padding: 0.55rem 0.85rem; font: inherit; font-weight: 700; cursor: pointer; }
+      .status { padding: 0.5rem 0.65rem; border-radius: 8px; border: 1px solid #ebc8b0; background: #fff3ea; font-size: 0.92rem; }
+      .small { font-size: 0.88rem; color: #684b3e; }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="card">
+        <h1>Etsy Listing Sprint Assistant</h1>
+        <p>${previewSummary}</p>
+        <p class="small">Session: ${escapeHtml(session.sessionId)}</p>
+      </section>
+
+      <section class="card">
+        <h2>Listing Preview</h2>
+        <p><strong>Score:</strong> ${pack.score}/100</p>
+        <p><strong>Title:</strong></p>
+        <p class="title">${escapeHtml(pack.title)}</p>
+        <p><strong>Tags:</strong></p>
+        <ul>${renderStringList(pack.tags)}</ul>
+        <p><strong>Highlights:</strong></p>
+        <ul>${renderStringList(pack.highlights)}</ul>
+        <p><strong>Description:</strong> ${escapeHtml(pack.description)}</p>
+        <p><strong>Photo Shot List:</strong></p>
+        <ul>${renderStringList(pack.photoShotList)}</ul>
+      </section>
+
+      <section class="card">
+        <h2>Unlock Export ($${PRICE_USD})</h2>
+        <a class="cta" href="${checkoutHref}" target="_blank" rel="noopener noreferrer">Open Checkout</a>
+        <p class="status">${paymentStatus}</p>
+        <form method="POST" action="${proofAction}">
+          <label>
+            Payer email
+            <input type="email" name="payerEmail" required maxlength="160" placeholder="you@example.com" />
+          </label>
+          <label>
+            Transaction ID
+            <input type="text" name="transactionId" required maxlength="120" placeholder="pi_..." />
+          </label>
+          <label>
+            Evidence URL (optional)
+            <input type="url" name="evidenceUrl" maxlength="300" placeholder="https://..." />
+          </label>
+          <label>
+            Note (optional)
+            <input type="text" name="note" maxlength="400" />
+          </label>
+          <button type="submit">Submit Proof</button>
+        </form>
+        ${
+          session.paid
+            ? `<p><a class="cta" href="${exportHref}">Download Export</a></p>`
+            : `<p class="small">Export unlocks after proof is accepted.</p>`
+        }
+        <p class="small"><a href="/">Return to app version</a></p>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
 async function loadState(): Promise<void> {
   await mkdir(DATA_DIR, { recursive: true });
   try {
@@ -681,41 +866,174 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
-    if (method === "POST" && pathname === "/api/listings/generate") {
-      const payload = await parseBody(request);
+    if (method === "POST" && pathname === "/quick-start") {
+      const payload = await parseFormBody(request);
+      payload.briefIntent = "no_js_quick_start";
+      if (!payload.source) {
+        payload.source = "web_form";
+      }
+
       const { input, source, selfTest, briefIntent } = parseGenerateInput(payload);
-      const sessionId = randomUUID();
-      const timestamp = new Date().toISOString();
-      const pack = buildListingPack(input);
-      const { previewPack, preview } = buildPreviewPack(pack);
-
-      const session: ListingSession = {
-        sessionId,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        source,
-        selfTest,
-        input,
-        pack,
-        paid: false
-      };
-
-      state.sessions[sessionId] = session;
+      const { session } = createListingSession(input, source, selfTest);
 
       await recordEvent("brief_generated", {
         source,
         selfTest,
+        sessionId: session.sessionId,
+        details: {
+          score: session.pack.score,
+          tags: session.pack.tags.length,
+          tone: input.tone,
+          briefIntent
+        }
+      });
+
+      response.writeHead(303, {
+        location: `/quick-start/${session.sessionId}`
+      });
+      response.end();
+      return;
+    }
+
+    const quickStartSessionMatch = pathname.match(/^\/quick-start\/([a-zA-Z0-9-]{8,120})$/);
+    if (method === "GET" && quickStartSessionMatch) {
+      const sessionId = quickStartSessionMatch[1];
+      const session = state.sessions[sessionId];
+      if (!session) {
+        sendHtml(response, 404, "<h1>Session not found</h1><p><a href=\"/\">Return to app</a></p>");
+        return;
+      }
+      sendHtml(response, 200, renderQuickStartPage(session));
+      return;
+    }
+
+    const quickStartCheckoutMatch = pathname.match(/^\/quick-start\/([a-zA-Z0-9-]{8,120})\/checkout$/);
+    if (method === "GET" && quickStartCheckoutMatch) {
+      const sessionId = quickStartCheckoutMatch[1];
+      const session = state.sessions[sessionId];
+      if (!session) {
+        sendHtml(response, 404, "<h1>Session not found</h1><p><a href=\"/\">Return to app</a></p>");
+        return;
+      }
+
+      await recordEvent("checkout_started", {
+        source: normalizeSource(url.searchParams.get("source"), session.source),
+        selfTest: parseBoolean(url.searchParams.get("selfTest")) || session.selfTest,
         sessionId,
         details: {
-          score: pack.score,
-          tags: pack.tags.length,
+          priceUsd: PRICE_USD,
+          route: "no_js_quick_start"
+        }
+      });
+
+      response.writeHead(303, {
+        location: PAYMENT_URL
+      });
+      response.end();
+      return;
+    }
+
+    const quickStartProofMatch = pathname.match(/^\/quick-start\/([a-zA-Z0-9-]{8,120})\/proof$/);
+    if (method === "POST" && quickStartProofMatch) {
+      const sessionId = quickStartProofMatch[1];
+      const session = state.sessions[sessionId];
+      if (!session) {
+        sendHtml(response, 404, "<h1>Session not found</h1><p><a href=\"/\">Return to app</a></p>");
+        return;
+      }
+
+      const payload = await parseFormBody(request);
+      const payerEmail = asRequiredString(payload, "payerEmail", 160);
+      const transactionId = asRequiredString(payload, "transactionId", 120);
+      const evidenceUrl = asOptionalString(payload, "evidenceUrl", 300);
+      const note = asOptionalString(payload, "note", 400);
+      const source = normalizeSource(payload.source, session.source);
+      const selfTest = parseBoolean(payload.selfTest) || session.selfTest;
+
+      session.paid = true;
+      session.updatedAt = new Date().toISOString();
+      session.paymentProof = {
+        submittedAt: session.updatedAt,
+        payerEmail,
+        transactionId,
+        evidenceUrl,
+        note
+      };
+
+      await recordEvent("payment_evidence_submitted", {
+        source,
+        selfTest,
+        sessionId,
+        details: {
+          transactionId,
+          payerEmail,
+          route: "no_js_quick_start"
+        }
+      });
+
+      response.writeHead(303, {
+        location: `/quick-start/${sessionId}`
+      });
+      response.end();
+      return;
+    }
+
+    const quickStartExportMatch = pathname.match(/^\/quick-start\/([a-zA-Z0-9-]{8,120})\/export\.txt$/);
+    if (method === "GET" && quickStartExportMatch) {
+      const sessionId = quickStartExportMatch[1];
+      const session = state.sessions[sessionId];
+      if (!session) {
+        sendHtml(response, 404, "<h1>Session not found</h1><p><a href=\"/\">Return to app</a></p>");
+        return;
+      }
+
+      if (!session.paid) {
+        sendHtml(
+          response,
+          402,
+          `<h1>Payment required</h1><p>Complete checkout and proof first.</p><p><a href="/quick-start/${sessionId}">Return</a></p>`
+        );
+        return;
+      }
+
+      const source = normalizeSource(url.searchParams.get("source"), session.source);
+      const selfTest = parseBoolean(url.searchParams.get("selfTest")) || session.selfTest;
+
+      await recordEvent("listing_exported", {
+        source,
+        selfTest,
+        sessionId,
+        details: {
+          format: "text",
+          tags: session.pack.tags.length,
+          score: session.pack.score,
+          route: "no_js_quick_start"
+        }
+      });
+
+      sendText(response, 200, buildExportText(session));
+      return;
+    }
+
+    if (method === "POST" && pathname === "/api/listings/generate") {
+      const payload = await parseBody(request);
+      const { input, source, selfTest, briefIntent } = parseGenerateInput(payload);
+      const { session, previewPack, preview } = createListingSession(input, source, selfTest);
+
+      await recordEvent("brief_generated", {
+        source,
+        selfTest,
+        sessionId: session.sessionId,
+        details: {
+          score: session.pack.score,
+          tags: session.pack.tags.length,
           tone: input.tone,
           briefIntent
         }
       });
 
       sendJson(response, 200, {
-        sessionId,
+        sessionId: session.sessionId,
         pack: previewPack,
         preview,
         paywall: {

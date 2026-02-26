@@ -96,6 +96,18 @@ body {
   min-width: 210px;
 }
 
+.noscript-card {
+  border-style: dashed;
+  border-color: #d7b39f;
+  background: #fff9f4;
+}
+
+.noscript-note {
+  margin: 0.2rem 0 0.65rem;
+  color: #6f3b27;
+  font-size: 0.9rem;
+}
+
 .kicker {
   margin: 0;
   font-size: 0.75rem;
